@@ -1,0 +1,87 @@
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+name: Quality Gate
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Download and verify dependencies
+      run: go mod download -x && go mod verify
+    - name: Run unit tests
+      run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+    - name: Upload test covergae
+      uses: actions/upload-artifact@v7
+      with:
+        name: unit-tests-coverage
+        path: ./coverage.out
+        retention-days: 1
+
+  golangci-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v9
+      with:
+        version: v2.11
+        args: --issues-exit-code=0 --output.checkstyle.path=./golangci-lint.xml
+    - name: Upload golangci-lint output
+      uses: actions/upload-artifact@v7
+      with:
+        name: golangci-lint-output
+        path: ./golangci-lint.xml
+        retention-days: 1
+
+  sonarqube:
+    needs:
+      - unit-tests
+      - golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Download test coverage
+      uses: actions/download-artifact@v8
+      with:
+        name: unit-tests-coverage
+    - name: Download golangci output
+      uses: actions/download-artifact@v8
+      with:
+        name: golangci-lint-output
+    - name: Sonarqube scanner
+      uses: sonarsource/sonarqube-scan-action@master
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    - id: sonarqube-quality-gate-check
+      name: Sonarqube quality gate check
+      uses: sonarsource/sonarqube-quality-gate-action@master
+      with:
+        pollingTimeoutSec: 600
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    - name: Sonarqube quality gate result
+      run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
