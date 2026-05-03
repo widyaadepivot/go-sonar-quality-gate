@@ -1,0 +1,1 @@
+# Go Quality Gate
