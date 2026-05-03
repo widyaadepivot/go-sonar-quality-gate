@@ -2,6 +2,10 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 name: Sonarqube Quality Gate
 jobs:
@@ -28,8 +32,7 @@ jobs:
       uses: golangci/golangci-lint-action@v9
       with:
         version: v2.11
-        args: --output.checkstyle.path=./golangci-lint.xml
-        # --issues-exit-code=0
+        args: --issues-exit-code=0 --output.checkstyle.path=./golangci-lint.xml
 
     - name: Sonarqube scanner
       uses: sonarsource/sonarqube-scan-action@master
