@@ -16,6 +16,11 @@ linters:
     - gocritic
     - modernize
     - dupl
+    - spancheck
+    - sqlclosecheck
+    - testpackage
+    - unqueryvet
+    - usestdlibvars
   exclusions:
     rules:
       - path: _test\.go
@@ -34,9 +39,14 @@ linters:
       rules:
         - name: package-comments
           disabled: true
+    testpackage:
+      skip-regexp: "(export|internal)_test\\.go"
+      allow-packages:
+        - main
 
 formatters:
   enable:
+    - gci
     - gofmt
     - gofumpt
     - goimports
