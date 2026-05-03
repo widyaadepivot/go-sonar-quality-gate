@@ -8,10 +8,22 @@ jobs:
   sonarqube:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout code
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
     
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Download and verify dependencies
+      run: go mod download -x && go mod verify
+
+    - name: Run unit tests
+      run: go test -race -covermode=atomic -coverprofile=coverage.out
+
     - name: SonarQube Scan
       uses: sonarsource/sonarqube-scan-action@master
       env:
