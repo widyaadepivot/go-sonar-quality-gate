@@ -33,6 +33,8 @@ jobs:
 
   golangci-lint:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
@@ -53,7 +55,8 @@ jobs:
         name: golangci-lint-result
         path: ./golangci-lint.xml
         retention-days: 1
-    - name: Evaluate golangci-lint result
+    - id: evaluate
+      name: Evaluate golangci-lint result
       run: |
         if [ ! -f ./golangci-lint.xml ]; then
           echo "::error::golangci-lint.xml not found"
@@ -66,37 +69,79 @@ jobs:
         echo "issue_count=$ERROR_COUNT" >> "$GITHUB_OUTPUT"
         echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
 
-        echo "## golangci-lint Summary" >> "$GITHUB_STEP_SUMMARY"
-        echo "" >> "$GITHUB_STEP_SUMMARY"
-        echo "- **Files with issues:** $FILE_COUNT" >> "$GITHUB_STEP_SUMMARY"
-        echo "- **Total issues:** $ERROR_COUNT" >> "$GITHUB_STEP_SUMMARY"
-        echo "" >> "$GITHUB_STEP_SUMMARY"
-
         if [ "$ERROR_COUNT" -gt 0 ]; then
-          echo "### Issues" >> "$GITHUB_STEP_SUMMARY"
-          echo '| File | Line | Message | Severity |' >> "$GITHUB_STEP_SUMMARY"
-          echo '|------|------|---------|----------|' >> "$GITHUB_STEP_SUMMARY"
-          # Parse checkstyle XML: track current <file name="..."> for each <error>
-          CURRENT_FILE=""
-          while IFS= read -r line; do
-            if echo "$line" | grep -q '<file '; then
-              CURRENT_FILE=$(echo "$line" | sed -n 's/.*name="\([^"]*\)".*/\1/p')
-            elif echo "$line" | grep -q '<error '; then
-              LINE_NUM=$(echo "$line" | sed -n 's/.*line="\([^"]*\)".*/\1/p')
-              MESSAGE=$(echo "$line" | sed -n 's/.*message="\([^"]*\)".*/\1/p')
-              SEVERITY=$(echo "$line" | sed -n 's/.*severity="\([^"]*\)".*/\1/p')
-              echo "| $CURRENT_FILE | $LINE_NUM | $MESSAGE | $SEVERITY |" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done < ./golangci-lint.xml
-          echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "::error::$ERROR_COUNT lint issue(s) found in $FILE_COUNT file(s)"
           exit 1
         else
-          echo "No issues found." >> "$GITHUB_STEP_SUMMARY"
           echo "::notice::No lint issues found"
         fi
+    - name: Comment golangci-lint result on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issueCount = process.env.ISSUE_COUNT;
+          const fileCount = process.env.FILE_COUNT;
+          const summaryFile = process.env.SUMMARY_FILE;
+
+          let body = `## golangci-lint Result\n\n`;
+          body += `- **Files with issues:** ${fileCount}\n`;
+          body += `- **Total issues:** ${issueCount}\n\n`;
+
+          if (Number(issueCount) > 0) {
+            body += `### Issues\n`;
+            body += `| File | Line | Message | Severity |\n`;
+            body += `|------|------|---------|----------|\n`;
+
+            const fs = require('fs');
+            const xml = fs.readFileSync('./golangci-lint.xml', 'utf8');
+            const lines = xml.split('\n');
+            let currentFile = '';
+            for (const line of lines) {
+              const fileMatch = line.match(/<file [^>]*name="([^"]*)"/);
+              if (fileMatch) currentFile = fileMatch[1];
+              const errorMatch = line.match(/<error [^>]*line="([^"]*)"[^>]*message="([^"]*)"[^>]*severity="([^"]*)"/);
+              if (errorMatch) {
+                body += `| ${currentFile} | ${errorMatch[1]} | ${errorMatch[2]} | ${errorMatch[3]} |\n`;
+              }
+            }
+            body += `\n> **${issueCount} lint issue(s) found in ${fileCount} file(s)**`;
+          } else {
+            body += `No issues found. :white_check_mark:`;
+          }
+
+          // Find existing comment to update
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find(c =>
+            c.user.login === 'github-actions[bot]' &&
+            c.body.startsWith('## golangci-lint Result')
+          );
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
+      env:
+        ISSUE_COUNT: ${{ steps.evaluate.outputs.issue_count }}
+        FILE_COUNT: ${{ steps.evaluate.outputs.file_count }}
 
   sonarqube:
+    if: always()
     needs:
       - unit-tests
       - golangci-lint
