@@ -1,7 +1,9 @@
-package gosonarqualitygate
+package gosonarqualitygate_test
 
 import (
 	"testing"
+
+	. "go-sonar-quality-gate"
 
 	"github.com/stretchr/testify/assert"
 )

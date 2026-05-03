@@ -39,6 +39,10 @@ linters:
       rules:
         - name: package-comments
           disabled: true
+        - name: exported
+          severity: warning
+        - name: redefines-builtin-id
+          disabled: true
     testpackage:
       skip-regexp: "(export|internal)_test\\.go"
       allow-packages:
@@ -51,3 +55,13 @@ formatters:
     - gofumpt
     - goimports
     - golines
+  settings:
+    gci:
+       sections:
+        - standard # Standard section: captures all standard packages.
+        - localmodule # Local module section: contains all local packages.
+        - dot # Dot section: contains all dot imports.
+        - alias # Alias section: contains all alias imports.
+        - default # Default section: contains all imports that could not be matched to another section type.
+        # - prefix(github.com/org/project) # Custom section: groups all imports with the specified Prefix.
+       custom-order: true
