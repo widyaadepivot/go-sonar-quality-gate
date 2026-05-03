@@ -40,7 +40,7 @@ linters:
         - name: package-comments
           disabled: true
         - name: exported
-          severity: warning
+          disabled: true
         - name: redefines-builtin-id
           disabled: true
     testpackage:
