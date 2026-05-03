@@ -28,7 +28,7 @@ jobs:
       uses: golangci/golangci-lint-action@v9
       with:
         version: v2.11
-        args: --issues-exit-code=0
+        args: --issues-exit-code=0 --output.checkstyle.path=./golangci-lint.xml
 
     - name: SonarQube Scan
       uses: sonarsource/sonarqube-scan-action@master
