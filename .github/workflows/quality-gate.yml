@@ -47,12 +47,54 @@ jobs:
       with:
         version: v2.11
         args: --issues-exit-code=0 --output.checkstyle.path=./golangci-lint.xml
-    - name: Upload golangci-lint output
+    - name: Upload golangci-lint result
       uses: actions/upload-artifact@v7
       with:
-        name: golangci-lint-output
+        name: golangci-lint-result
         path: ./golangci-lint.xml
         retention-days: 1
+    - name: Evaluate golangci-lint result
+      run: |
+        if [ ! -f ./golangci-lint.xml ]; then
+          echo "::error::golangci-lint.xml not found"
+          exit 1
+        fi
+
+        ERROR_COUNT=$(grep -c '<error ' ./golangci-lint.xml || true)
+        FILE_COUNT=$(grep -c '<file ' ./golangci-lint.xml || true)
+
+        echo "issue_count=$ERROR_COUNT" >> "$GITHUB_OUTPUT"
+        echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
+
+        echo "## golangci-lint Summary" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- **Files with issues:** $FILE_COUNT" >> "$GITHUB_STEP_SUMMARY"
+        echo "- **Total issues:** $ERROR_COUNT" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$ERROR_COUNT" -gt 0 ]; then
+          echo "### Issues" >> "$GITHUB_STEP_SUMMARY"
+          echo '| File | Line | Message | Severity |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|------|------|---------|----------|' >> "$GITHUB_STEP_SUMMARY"
+          # Parse checkstyle XML: track current <file name="..."> for each <error>
+          CURRENT_FILE=""
+          while IFS= read -r line; do
+            if echo "$line" | grep -q '<file '; then
+              CURRENT_FILE=$(echo "$line" | sed -n 's/.*name="\([^"]*\)".*/\1/p')
+            elif echo "$line" | grep -q '<error '; then
+              LINE_NUM=$(echo "$line" | sed -n 's/.*line="\([^"]*\)".*/\1/p')
+              MESSAGE=$(echo "$line" | sed -n 's/.*message="\([^"]*\)".*/\1/p')
+              SEVERITY=$(echo "$line" | sed -n 's/.*severity="\([^"]*\)".*/\1/p')
+              echo "| $CURRENT_FILE | $LINE_NUM | $MESSAGE | $SEVERITY |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done < ./golangci-lint.xml
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::$ERROR_COUNT lint issue(s) found in $FILE_COUNT file(s)"
+          exit 1
+        else
+          echo "No issues found." >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::No lint issues found"
+        fi
 
   sonarqube:
     needs:
@@ -68,10 +110,10 @@ jobs:
       uses: actions/download-artifact@v8
       with:
         name: unit-tests-coverage
-    - name: Download golangci output
+    - name: Download golangci-lint result
       uses: actions/download-artifact@v8
       with:
-        name: golangci-lint-output
+        name: golangci-lint-result
     - name: Sonarqube scanner
       uses: sonarsource/sonarqube-scan-action@master
       env:
