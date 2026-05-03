@@ -1,0 +1,43 @@
+version: "2"
+
+linters:
+  enable: 
+    - revive
+    - gosec
+    - staticcheck
+    - errcheck
+    - gocyclo
+    - govet
+    - unused
+    - ineffassign
+    - bodyclose
+    - prealloc
+    - misspell
+    - gocritic
+    - modernize
+    - dupl
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - dupl
+          - gosec
+          - revive
+      - path-except: _test\.go
+        linters:
+          - forbidigo
+  settings:
+    revive:
+      enable-default-rules: true
+      rules:
+        - name: package-comments
+          disabled: true
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
