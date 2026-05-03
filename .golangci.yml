@@ -41,3 +41,8 @@ formatters:
     - gofumpt
     - goimports
     - golines
+
+output:
+  formats:
+    checkstyle:
+      path: ./golangci-lint.xml

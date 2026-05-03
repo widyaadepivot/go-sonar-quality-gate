@@ -1,2 +1,2 @@
 coverage.out
-golangci.output
+golangci-lint.xml
