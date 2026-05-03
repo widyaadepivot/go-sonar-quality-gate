@@ -65,3 +65,6 @@ formatters:
         - default # Default section: contains all imports that could not be matched to another section type.
         # - prefix(github.com/org/project) # Custom section: groups all imports with the specified Prefix.
        custom-order: true
+
+severity:
+  default: error
